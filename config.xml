@@ -1,7 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<widget id="com.myclock.app" version="1.0.0" 
-  xmlns="http://www.w3.org/ns/widgets" 
-  xmlns:cdv="http://cordova.apache.org/ns/1.0">
+<widget id="com.myclock.app" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
     <name>Clock</name>
     <description>A beautiful customizable clock</description>
     <author>Clock</author>
