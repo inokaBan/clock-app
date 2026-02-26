@@ -20,5 +20,5 @@
     <preference name="android-minSdkVersion" value="22" />
     <preference name="android-targetSdkVersion" value="35" />
     <preference name="Fullscreen" value="true" />
-    <preference name="Orientation" value="any" />
+    <preference name="Orientation" value="default" />
 </widget>
