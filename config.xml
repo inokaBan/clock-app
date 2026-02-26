@@ -21,9 +21,4 @@
     <preference name="android-targetSdkVersion" value="35" />
     <preference name="Fullscreen" value="true" />
     <preference name="Orientation" value="any" />
-    <preference name="BackgroundColor" value="0xff000000" />
-    <preference name="AndroidWindowSplashScreenAnimatedIcon" value="www/icon-512.png" />
-    <preference name="StatusBarOverlaysWebView" value="false" />
-    <preference name="StatusBarBackgroundColor" value="#000000" />
-    <preference name="StatusBarStyle" value="lightcontent" />
 </widget>
