@@ -36,6 +36,9 @@ jobs:
       - name: Add Android platform
         run: cordova platform add android
 
+      - name: Remove default splash screen plugin
+        run: cordova plugin remove cordova-plugin-splashscreen --nosave || true
+
       - name: Build debug APK
         run: cordova build android --debug
 
