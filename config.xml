@@ -1,28 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <widget id="com.myclock.app" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
     <name>Clock</name>
-    <description>A beautiful customizable clock</description>
-    <author email="dev@myclock.app" href="http://myclock.app">Clock</author>
-
+    <description>
+        A sample Apache Cordova application that responds to the deviceready event.
+    </description>
+    <author email="dev@cordova.apache.org" href="https://cordova.apache.org">
+        Apache Cordova Team
+    </author>
     <content src="index.html" />
-
-    <access origin="*" />
     <allow-intent href="http://*/*" />
     <allow-intent href="https://*/*" />
-
-    <!-- Icons -->
-    <icon src="www/icon-512.png" />
-    <platform name="android">
-        <icon src="www/icon-192.png" density="hdpi" />
-        <icon src="www/icon-192.png" density="xhdpi" />
-        <icon src="www/icon-192.png" density="xxhdpi" />
-        <icon src="www/icon-512.png" density="xxxhdpi" />
-    </platform>
-
-    <preference name="DisallowOverscroll" value="true" />
-    <preference name="android-minSdkVersion" value="22" />
-    <preference name="android-targetSdkVersion" value="35" />
-    <preference name="Fullscreen" value="true" />
-    <preference name="Orientation" value="any" />
-    <preference name="BackgroundColor" value="0xff000000" />
 </widget>
