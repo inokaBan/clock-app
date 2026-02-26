@@ -36,11 +36,14 @@ jobs:
       - name: Add Android platform
         run: cordova platform add android
 
-      - name: Build debug APK (no signing needed)
+      - name: Build debug APK
         run: cordova build android --debug
+
+      - name: Rename APK
+        run: cp platforms/android/app/build/outputs/apk/debug/app-debug.apk Clock.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Clock-APK
-          path: platforms/android/app/build/outputs/apk/debug/app-debug.apk
+          name: Clock
+          path: Clock.apk
