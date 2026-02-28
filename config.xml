@@ -1,5 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
-<widget id="com.myclock.app" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+<widget id="com.myclock.app" version="1.0.0"
+  xmlns="http://www.w3.org/ns/widgets"
+  xmlns:cdv="http://cordova.apache.org/ns/1.0">
     <name>Clock</name>
     <description>A beautiful customizable clock</description>
     <author>Clock</author>
@@ -7,16 +9,31 @@
     <access origin="*" />
     <allow-intent href="http://*/*" />
     <allow-intent href="https://*/*" />
+
     <icon src="www/icon-512.png" />
     <platform name="android">
+        <icon src="www/icon-192.png" density="mdpi" />
         <icon src="www/icon-192.png" density="hdpi" />
         <icon src="www/icon-192.png" density="xhdpi" />
         <icon src="www/icon-192.png" density="xxhdpi" />
         <icon src="www/icon-512.png" density="xxxhdpi" />
+        <splash src="www/splash/port_mdpi.png"    density="mdpi" />
+        <splash src="www/splash/port_hdpi.png"    density="hdpi" />
+        <splash src="www/splash/port_xhdpi.png"   density="xhdpi" />
+        <splash src="www/splash/port_xxhdpi.png"  density="xxhdpi" />
+        <splash src="www/splash/port_xxxhdpi.png" density="xxxhdpi" />
     </platform>
+
     <preference name="DisallowOverscroll" value="true" />
     <preference name="android-minSdkVersion" value="22" />
     <preference name="android-targetSdkVersion" value="35" />
     <preference name="Fullscreen" value="true" />
     <preference name="Orientation" value="default" />
+    <preference name="SplashScreenDelay" value="1500" />
+    <preference name="AutoHideSplashScreen" value="true" />
+    <preference name="FadeSplashScreen" value="true" />
+    <preference name="FadeSplashScreenDuration" value="500" />
+    <preference name="SplashMaintainAspectRatio" value="true" />
+    <preference name="SplashShowOnlyFirstTime" value="false" />
+    <preference name="ShowSplashScreenSpinner" value="false" />
 </widget>
