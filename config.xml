@@ -12,12 +12,12 @@
 
     <icon src="www/icon-512.png" />
     <platform name="android">
-        <icon density="ldpi" src="res/icon/android/ldpi-foreground.png" foreground="res/icon/android/ldpi-foreground.png" monochrome="res/icon/android/ldpi-foreground.png" background="#000000" />
-        <icon density="mdpi" src="res/icon/android/mdpi-foreground.png" foreground="res/icon/android/mdpi-foreground.png" monochrome="res/icon/android/mdpi-foreground.png" background="#000000" />
-        <icon density="hdpi" src="res/icon/android/hdpi-foreground.png" foreground="res/icon/android/hdpi-foreground.png" monochrome="res/icon/android/hdpi-foreground.png" background="#000000" />
-        <icon density="xhdpi" src="res/icon/android/xhdpi-foreground.png" foreground="res/icon/android/xhdpi-foreground.png" monochrome="res/icon/android/xhdpi-foreground.png" background="#000000" />
-        <icon density="xxhdpi" src="res/icon/android/xxhdpi-foreground.png" foreground="res/icon/android/xxhdpi-foreground.png" monochrome="res/icon/android/xxhdpi-foreground.png" background="#000000" />
-        <icon density="xxxhdpi" src="res/icon/android/xxxhdpi-foreground.png" foreground="res/icon/android/xxxhdpi-foreground.png" monochrome="res/icon/android/xxxhdpi-foreground.png" background="#000000" />
+        <icon density="ldpi" src="res/icon/android/ldpi-foreground.png" foreground="res/icon/android/ldpi-foreground.png" monochrome="res/icon/android/ldpi-foreground.png" background="res/icon/android/ldpi-background.png" />
+        <icon density="mdpi" src="res/icon/android/mdpi-foreground.png" foreground="res/icon/android/mdpi-foreground.png" monochrome="res/icon/android/mdpi-foreground.png" background="res/icon/android/mdpi-background.png" />
+        <icon density="hdpi" src="res/icon/android/hdpi-foreground.png" foreground="res/icon/android/hdpi-foreground.png" monochrome="res/icon/android/hdpi-foreground.png" background="res/icon/android/hdpi-background.png" />
+        <icon density="xhdpi" src="res/icon/android/xhdpi-foreground.png" foreground="res/icon/android/xhdpi-foreground.png" monochrome="res/icon/android/xhdpi-foreground.png" background="res/icon/android/xhdpi-background.png" />
+        <icon density="xxhdpi" src="res/icon/android/xxhdpi-foreground.png" foreground="res/icon/android/xxhdpi-foreground.png" monochrome="res/icon/android/xxhdpi-foreground.png" background="res/icon/android/xxhdpi-background.png" />
+        <icon density="xxxhdpi" src="res/icon/android/xxxhdpi-foreground.png" foreground="res/icon/android/xxxhdpi-foreground.png" monochrome="res/icon/android/xxxhdpi-foreground.png" background="res/icon/android/xxxhdpi-background.png" />
         <preference name="AndroidWindowSplashScreenAnimatedIcon" value="www/splash/android12-splash-icon.png" />
         <preference name="SplashScreenBackgroundColor" value="#000000" />
         <preference name="AndroidWindowSplashScreenIconBackgroundColor" value="#000000" />
