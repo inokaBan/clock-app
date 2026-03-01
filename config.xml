@@ -22,11 +22,6 @@
         <preference name="AndroidWindowSplashScreenAnimatedIcon" value="www/splash/android12-splash-icon.png" />
         <preference name="SplashScreenBackgroundColor" value="#000000" />
         <preference name="AndroidWindowSplashScreenIconBackgroundColor" value="#000000" />
-        <splash src="www/splash/port_mdpi.png"    density="mdpi" />
-        <splash src="www/splash/port_hdpi.png"    density="hdpi" />
-        <splash src="www/splash/port_xhdpi.png"   density="xhdpi" />
-        <splash src="www/splash/port_xxhdpi.png"  density="xxhdpi" />
-        <splash src="www/splash/port_xxxhdpi.png" density="xxxhdpi" />
     </platform>
 
     <preference name="DisallowOverscroll" value="true" />
