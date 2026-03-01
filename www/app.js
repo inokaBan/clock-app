@@ -94,6 +94,7 @@ const lsSec       = document.getElementById('ls-sec');
 const clockTargets = [clockEl, portraitHr, portraitMin, portraitSec];
 const flipMap = new WeakMap();
 let fitTextRafId = null;
+let fitTextRafId2 = null;
 
 function updatePortraitMinLabelPosition() {
   const placeBelow = !state.showSeconds;
@@ -289,11 +290,10 @@ function fitTextNow() {
   for (let i = 0; i < 12; i++) {
     const mid = (lo + hi) / 2;
     portraitNums.forEach(el => { el.style.fontSize = mid + 'px'; });
-    const fitsRows = portraitNums.every(el =>
+    const fits = portraitNums.every(el =>
       el.scrollWidth <= screenW && el.scrollHeight <= rowMaxH
     );
-    const fitsWrap = portraitWrap.scrollHeight <= screenH;
-    if (fitsRows && fitsWrap) lo = mid;
+    if (fits) lo = mid;
     else hi = mid;
   }
   portraitNums.forEach(el => { el.style.fontSize = lo + 'px'; });
@@ -301,9 +301,13 @@ function fitTextNow() {
 
 function fitText() {
   if (fitTextRafId !== null) cancelAnimationFrame(fitTextRafId);
+  if (fitTextRafId2 !== null) cancelAnimationFrame(fitTextRafId2);
   fitTextRafId = requestAnimationFrame(() => {
     fitTextRafId = null;
-    fitTextNow();
+    fitTextRafId2 = requestAnimationFrame(() => {
+      fitTextRafId2 = null;
+      fitTextNow();
+    });
   });
 }
 
@@ -606,6 +610,8 @@ window.addEventListener('orientationchange', onOrientationChange, { passive: tru
 if (screen.orientation && screen.orientation.addEventListener) {
   screen.orientation.addEventListener('change', onOrientationChange);
 }
+window.addEventListener('fullscreenchange', fitText, { passive: true });
+window.addEventListener('webkitfullscreenchange', fitText, { passive: true });
 
 function tryLockOrientation(target) {
   const o = screen && screen.orientation ? screen.orientation : null;
@@ -711,6 +717,15 @@ document.getElementById('portrait-wrap').addEventListener('click', e => {
     if (!document.fullscreenElement && !document.webkitFullscreenElement) requestFullscreen();
 });
 window.addEventListener('load', () => { setTimeout(requestFullscreen, 300); });
+window.addEventListener('load', () => { setTimeout(fitText, 80); });
+window.addEventListener('load', () => { setTimeout(fitText, 260); });
+
+if (document.fonts) {
+  document.fonts.ready.then(() => fitText());
+  if (document.fonts.addEventListener) {
+    document.fonts.addEventListener('loadingdone', fitText);
+  }
+}
 
 /* ══ SERVICE WORKER ══ */
 if ('serviceWorker' in navigator) {
@@ -719,7 +734,11 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-document.addEventListener('deviceready', applyOrientationMode, false);
+document.addEventListener('deviceready', () => {
+  applyOrientationMode();
+  setTimeout(fitText, 80);
+  setTimeout(fitText, 260);
+}, false);
 
 /* ══ INIT ══ */
 restoreSavedFonts(); // restore custom fonts from localStorage first
