@@ -43,6 +43,7 @@ const state = {
   size:        18,
   gradient:    GRADIENTS[0].css,
   bg:          BACKGROUNDS[0].css,
+  panelHeightVh: 50,
   format24:    true,
   showSeconds: true,
   screensaver: false,
@@ -60,6 +61,7 @@ function saveState() {
       size:        state.size,
       gradient:    state.gradient,
       bg:          state.bg,
+      panelHeightVh: state.panelHeightVh,
       format24:    state.format24,
       showSeconds: state.showSeconds,
       screensaver: state.screensaver,
@@ -332,6 +334,13 @@ function applyBg() {
   document.body.style.background = state.bg;
 }
 
+function applyPanelPortraitHeight() {
+  const raw = Number(state.panelHeightVh);
+  const clamped = Number.isFinite(raw) ? Math.max(35, Math.min(88, raw)) : 50;
+  state.panelHeightVh = clamped;
+  document.documentElement.style.setProperty('--panel-portrait-h', `${clamped}vh`);
+}
+
 function applyColor() {
   const css = state.gradient;
   const isGrad = css.startsWith('linear') || css.startsWith('radial');
@@ -356,7 +365,7 @@ function applyColor() {
   });
 }
 
-function applyAll() { applyFont(); applyColor(); applyBg(); applySize(); }
+function applyAll() { applyFont(); applyColor(); applyBg(); applyPanelPortraitHeight(); applySize(); }
 
 /* ══ RESTORE SAVED CUSTOM FONTS ══ */
 function restoreSavedFonts() {
@@ -564,8 +573,17 @@ document.getElementById('custom-bg').addEventListener('input', e => {
 const panel     = document.getElementById('panel');
 const toggleBtn = document.getElementById('settings-toggle');
 const closeBtn  = document.getElementById('panel-close');
+const panelResizeGrip = document.getElementById('panel-resize-grip');
 const IDLE_MS   = 3000;
 let idleTimer   = null;
+let isPanelResizing = false;
+let panelResizePointerId = null;
+let panelResizeStartY = 0;
+let panelResizeStartVh = 50;
+
+function isPortraitViewport() {
+  return window.matchMedia('(orientation: portrait)').matches;
+}
 
 function scheduleHide() {
   clearTimeout(idleTimer);
@@ -600,7 +618,47 @@ document.addEventListener('pointerdown', e => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanelFn(); });
 scheduleHide();
+
+function beginPanelResize(e) {
+  if (!panel.classList.contains('open') || !isPortraitViewport()) return;
+  isPanelResizing = true;
+  panelResizePointerId = e.pointerId;
+  panelResizeStartY = e.clientY;
+  panelResizeStartVh = Number(state.panelHeightVh) || 50;
+  panel.classList.add('resizing');
+  if (panelResizeGrip.setPointerCapture) panelResizeGrip.setPointerCapture(e.pointerId);
+  e.preventDefault();
+}
+
+function movePanelResize(e) {
+  if (!isPanelResizing || e.pointerId !== panelResizePointerId) return;
+  const deltaPx = panelResizeStartY - e.clientY;
+  const deltaVh = (deltaPx / window.innerHeight) * 100;
+  state.panelHeightVh = Number((panelResizeStartVh + deltaVh).toFixed(1));
+  applyPanelPortraitHeight();
+  fitText();
+  e.preventDefault();
+}
+
+function endPanelResize(e) {
+  if (!isPanelResizing) return;
+  if (e && e.pointerId !== undefined && e.pointerId !== panelResizePointerId) return;
+  isPanelResizing = false;
+  panelResizePointerId = null;
+  panel.classList.remove('resizing');
+  saveState();
+}
+
+if (panelResizeGrip) {
+  panelResizeGrip.addEventListener('pointerdown', beginPanelResize);
+  panelResizeGrip.addEventListener('pointermove', movePanelResize);
+  panelResizeGrip.addEventListener('pointerup', endPanelResize);
+  panelResizeGrip.addEventListener('pointercancel', endPanelResize);
+  panelResizeGrip.addEventListener('lostpointercapture', endPanelResize);
+}
+
 window.addEventListener('resize', () => {
+  applyPanelPortraitHeight();
   settleAllFlips();
   fitText();
 }, { passive: true });
