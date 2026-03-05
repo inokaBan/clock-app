@@ -137,6 +137,10 @@ body {
 @media (orientation: portrait) {
   #clock-wrap    { display: none; }
   #portrait-wrap { display: flex; }
+  #portrait-wrap .p-num {
+    width: auto;
+    max-width: calc(100vw - 1rem);
+  }
   .flip-slot.digit {
     border-radius: 0.08em;
     background: rgba(255,255,255,0.03);

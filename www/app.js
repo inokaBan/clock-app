@@ -277,23 +277,27 @@ function fitTextNow() {
     clockEl.style.fontSize = lo + 'px';
   }
 
-  // Portrait: one shared size, constrained by both width and row-height.
-  const screenW = window.innerWidth - 16;
+  // Portrait: one shared size, constrained by width and a row-height budget.
+  // Using scrollHeight here can under-size due to 3D flip layers, so we
+  // constrain height by target font size relative to available row height.
+  const portraitAvailW = Math.max(120, portraitWrap.clientWidth - 8);
   const screenH = window.innerHeight - 16;
   const rowCount = state.showSeconds ? 3 : 2;
   const rowMaxH = screenH / rowCount;
   const vwPx = window.innerWidth / 100;
   const pMaxPx = maxSize * vwPx;
   const portraitNums = state.showSeconds ? [portraitHr, portraitMin, portraitSec] : [portraitHr, portraitMin];
+  const rowFontBudget = rowMaxH * 0.78;
 
   let lo = 4, hi = pMaxPx;
   for (let i = 0; i < 12; i++) {
     const mid = (lo + hi) / 2;
     portraitNums.forEach(el => { el.style.fontSize = mid + 'px'; });
     const fits = portraitNums.every(el =>
-      el.scrollWidth <= screenW && el.scrollHeight <= rowMaxH
+      el.scrollWidth <= portraitAvailW
     );
-    if (fits) lo = mid;
+    const fitsHeight = mid <= rowFontBudget;
+    if (fits && fitsHeight) lo = mid;
     else hi = mid;
   }
   portraitNums.forEach(el => { el.style.fontSize = lo + 'px'; });
@@ -716,7 +720,7 @@ document.getElementById('portrait-wrap').addEventListener('click', e => {
   if (!panel.classList.contains('open') && e.target !== toggleBtn)
     if (!document.fullscreenElement && !document.webkitFullscreenElement) requestFullscreen();
 });
-window.addEventListener('load', () => { setTimeout(requestFullscreen, 300); });
+// Fullscreen must be initiated from a user gesture (tap/click), not on load.
 window.addEventListener('load', () => { setTimeout(fitText, 80); });
 window.addEventListener('load', () => { setTimeout(fitText, 260); });
 
