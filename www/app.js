@@ -86,17 +86,75 @@ loadState();
 
 /* ══ CLOCK ELEMENTS ══ */
 const clockEl    = document.getElementById('clock-display');
+const clockStage = document.getElementById('clock-stage');
+const ampmLandscape = document.getElementById('ampm-landscape');
 const portraitHr  = document.getElementById('portrait-hr');
+const portraitHrStage = document.getElementById('portrait-hr-stage');
+const ampmPortrait = document.getElementById('ampm-portrait');
 const portraitMin = document.getElementById('portrait-min');
 const portraitSec = document.getElementById('portrait-sec');
 const portraitWrap = document.getElementById('portrait-wrap');
 const portraitMinLabel = document.getElementById('portrait-min-label');
 const portraitSecRow = document.getElementById('portrait-sec-row');
+const landscapeLabels = document.getElementById('landscape-labels');
 const lsSec       = document.getElementById('ls-sec');
 const clockTargets = [clockEl, portraitHr, portraitMin, portraitSec];
 const flipMap = new WeakMap();
 let fitTextRafId = null;
 let fitTextRafId2 = null;
+
+function clamp(val, min, max) {
+  return Math.min(max, Math.max(min, val));
+}
+
+function toPct(value, total) {
+  if (!total) return 0;
+  return clamp((value / total) * 100, 0, 100);
+}
+
+function updateLandscapeLabelAnchors() {
+  const line = flipMap.get(clockEl);
+  if (!line || !line.slots || line.slots.length < 5) return;
+
+  const parent = landscapeLabels.parentElement;
+  const lineRect = clockEl.getBoundingClientRect();
+  const maxTrackW = parent ? parent.clientWidth : lineRect.width;
+  const trackW = clamp(lineRect.width, 120, Math.max(120, maxTrackW));
+  landscapeLabels.style.width = `${trackW}px`;
+
+  const labelRect = landscapeLabels.getBoundingClientRect();
+  if (!labelRect.width) return;
+
+  const slots = line.slots.map(s => s.node);
+  const centerPct = (startIdx, endIdx) => {
+    const start = slots[startIdx];
+    const end = slots[endIdx];
+    if (!start || !end) return null;
+    const sRect = start.getBoundingClientRect();
+    const eRect = end.getBoundingClientRect();
+    const centerX = (sRect.left + eRect.right) / 2;
+    return toPct(centerX - labelRect.left, labelRect.width);
+  };
+
+  const hrX = centerPct(0, 1);
+  const minX = centerPct(3, 4);
+  const secX = state.showSeconds ? centerPct(6, 7) : null;
+
+  if (hrX !== null) landscapeLabels.style.setProperty('--ls-hr-x', `${hrX}%`);
+  if (minX !== null) landscapeLabels.style.setProperty('--ls-min-x', `${minX}%`);
+  if (secX !== null) landscapeLabels.style.setProperty('--ls-sec-x', `${secX}%`);
+}
+
+function updateAmPmSlots(suffix) {
+  const hasSuffix = !!suffix;
+  const text = hasSuffix ? suffix : '';
+  ampmLandscape.textContent = text;
+  ampmPortrait.textContent = text;
+  ampmLandscape.style.display = hasSuffix ? '' : 'none';
+  ampmPortrait.style.display = hasSuffix ? '' : 'none';
+  clockStage.classList.toggle('no-ampm', !hasSuffix);
+  portraitHrStage.classList.toggle('no-ampm', !hasSuffix);
+}
 
 function updatePortraitMinLabelPosition() {
   const placeBelow = !state.showSeconds;
@@ -234,15 +292,15 @@ function tick() {
     hStr = String(h).padStart(2,'0');
   }
 
-  // Landscape: always one line — HH:MM[:SS] [AM/PM]
+  // Landscape: always one line — HH:MM[:SS]
   const secPart = state.showSeconds ? ':' + s : '';
-  const ampmPart = suffix ? ' ' + suffix : '';
-  renderFlipLine(clockEl, hStr + ':' + m + secPart + ampmPart);
+  renderFlipLine(clockEl, hStr + ':' + m + secPart);
 
-  // Portrait: split into blocks
-  renderFlipLine(portraitHr, hStr + (suffix ? ' ' + suffix : ''));
+  // Portrait: split into blocks (AM/PM is rendered as outlined background text)
+  renderFlipLine(portraitHr, hStr);
   renderFlipLine(portraitMin, m);
   renderFlipLine(portraitSec, s);
+  updateAmPmSlots(suffix);
 
   // Show/hide sec row in portrait
   portraitSecRow.style.display = state.showSeconds ? 'flex' : 'none';
@@ -259,25 +317,33 @@ function tick() {
    Uses the user's chosen size as the max — never goes above it.
    Only kicks in when needed, so small sizes are unaffected. */
 function fitTextNow() {
-  // Landscape: fit clock-display inside clock-wrap width
+  // Landscape: fit clock-display inside clock-wrap width + height budget
   const wrap = document.getElementById('clock-wrap');
-  const wrapW = wrap.clientWidth - 32; // subtract padding
+  const labels = document.getElementById('landscape-labels');
+  const wrapStyles = getComputedStyle(wrap);
+  const padX = (parseFloat(wrapStyles.paddingLeft) || 0) + (parseFloat(wrapStyles.paddingRight) || 0);
+  const padY = (parseFloat(wrapStyles.paddingTop) || 0) + (parseFloat(wrapStyles.paddingBottom) || 0);
+  const gapY = parseFloat(wrapStyles.rowGap || wrapStyles.gap) || 0;
+  const wrapW = Math.max(40, wrap.clientWidth - padX);
+  const wrapH = Math.max(40, wrap.clientHeight - padY);
+  const labelsH = labels ? labels.getBoundingClientRect().height : 0;
+  const availableClockH = Math.max(24, wrapH - labelsH - gapY);
   const maxSize = state.size; // vmin — convert to px
   const vminPx = Math.min(window.innerWidth, window.innerHeight) / 100;
-  let sizePx = maxSize * vminPx;
+  const sizePx = maxSize * vminPx;
 
-  // Binary search to find largest font that fits
-  clockEl.style.fontSize = sizePx + 'px';
-  if (clockEl.scrollWidth > wrapW) {
-    let lo = 4, hi = sizePx;
-    for (let i = 0; i < 12; i++) {
-      const mid = (lo + hi) / 2;
-      clockEl.style.fontSize = mid + 'px';
-      if (clockEl.scrollWidth > wrapW) hi = mid;
-      else lo = mid;
-    }
-    clockEl.style.fontSize = lo + 'px';
+  let lLo = 4, lHi = Math.max(4, sizePx);
+  for (let i = 0; i < 12; i++) {
+    const mid = (lLo + lHi) / 2;
+    clockEl.style.fontSize = mid + 'px';
+    const fitsWidth = clockEl.scrollWidth <= wrapW;
+    const fitsHeight = clockEl.getBoundingClientRect().height <= availableClockH;
+    if (fitsWidth && fitsHeight) lLo = mid;
+    else lHi = mid;
   }
+  clockEl.style.fontSize = lLo + 'px';
+  ampmLandscape.style.fontSize = Math.max(12, lLo * 0.36) + 'px';
+  updateLandscapeLabelAnchors();
 
   // Portrait: one shared size, constrained by width and a row-height budget.
   // Using scrollHeight here can under-size due to 3D flip layers, so we
@@ -303,6 +369,7 @@ function fitTextNow() {
     else hi = mid;
   }
   portraitNums.forEach(el => { el.style.fontSize = lo + 'px'; });
+  ampmPortrait.style.fontSize = Math.max(11, lo * 0.34) + 'px';
 }
 
 function fitText() {
@@ -322,6 +389,10 @@ function applyFont() {
   clockTargets.forEach(el => {
     el.style.fontFamily = state.font;
     el.style.fontWeight = state.font === FONTS[0].css ? '700' : '400';
+  });
+  [ampmLandscape, ampmPortrait].forEach(el => {
+    el.style.fontFamily = state.font;
+    el.style.fontWeight = state.font === FONTS[0].css ? '700' : '500';
   });
 }
 

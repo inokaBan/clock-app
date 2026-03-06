@@ -17,7 +17,10 @@
 
 <!-- LANDSCAPE: single line + labels below -->
 <div id="clock-wrap">
-  <div id="clock-display">00:00</div>
+  <div id="clock-stage" class="clock-stage no-ampm">
+    <div id="clock-display">00:00</div>
+    <div id="ampm-landscape" class="ampm-outline" aria-hidden="true">AM</div>
+  </div>
   <div id="landscape-labels">
     <span class="ls-lbl" id="ls-hr">hr</span>
     <span class="ls-lbl" id="ls-min">min</span>
@@ -28,7 +31,10 @@
 <!-- PORTRAIT: HR / divider / MIN / divider / SEC (optional) -->
 <div id="portrait-wrap">
   <div class="p-label">hr</div>
-  <div class="p-num" id="portrait-hr">00</div>
+  <div id="portrait-hr-stage" class="p-num-stage no-ampm">
+    <div class="p-num" id="portrait-hr">00</div>
+    <div id="ampm-portrait" class="ampm-outline ampm-portrait" aria-hidden="true">AM</div>
+  </div>
   <div id="portrait-divider"></div>
   <div class="p-label" id="portrait-min-label">min</div>
   <div class="p-num" id="portrait-min">00</div>
