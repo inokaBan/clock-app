@@ -49,6 +49,8 @@ const state = {
   screensaver: false,
   orientationMode: 'auto', // auto | portrait | landscape
   customFonts: [], // [{name, family, dataUrl}]
+  alarms: [], // [{id, time: "HH:MM", enabled, ringtoneId}]
+  customRingtones: [], // [{id, name, dataUrl}]
 };
 
 /* ══ STORAGE ══ */
@@ -67,6 +69,8 @@ function saveState() {
       screensaver: state.screensaver,
       orientationMode: state.orientationMode,
       customFonts: state.customFonts, // saved as base64 dataUrls — persist across sessions!
+      alarms: state.alarms,
+      customRingtones: state.customRingtones,
     }));
   } catch(e) { console.warn('save failed', e); }
 }
@@ -83,14 +87,11 @@ function loadState() {
 }
 
 loadState();
+sanitizeAlarmState();
 
 /* ══ CLOCK ELEMENTS ══ */
 const clockEl    = document.getElementById('clock-display');
-const clockStage = document.getElementById('clock-stage');
-const ampmLandscape = document.getElementById('ampm-landscape');
 const portraitHr  = document.getElementById('portrait-hr');
-const portraitHrStage = document.getElementById('portrait-hr-stage');
-const ampmPortrait = document.getElementById('ampm-portrait');
 const portraitMin = document.getElementById('portrait-min');
 const portraitSec = document.getElementById('portrait-sec');
 const portraitWrap = document.getElementById('portrait-wrap');
@@ -98,13 +99,310 @@ const portraitMinLabel = document.getElementById('portrait-min-label');
 const portraitSecRow = document.getElementById('portrait-sec-row');
 const landscapeLabels = document.getElementById('landscape-labels');
 const lsSec       = document.getElementById('ls-sec');
+const alarmTimeInput = document.getElementById('alarm-time-input');
+const alarmAddBtn = document.getElementById('alarm-add-btn');
+const alarmListEl = document.getElementById('alarm-list');
+const alarmRingtoneSelect = document.getElementById('alarm-ringtone-select');
+const ringtoneUploadInput = document.getElementById('ringtone-upload');
+const alarmDefaultBtns = document.querySelectorAll('.alarm-default-btn');
 const clockTargets = [clockEl, portraitHr, portraitMin, portraitSec];
 const flipMap = new WeakMap();
 let fitTextRafId = null;
 let fitTextRafId2 = null;
+const BUILTIN_RINGTONES = [
+  { id: 'builtin-classic', name: 'Classic Beep', pattern: [{ freq: 880, duration: 0.2, gap: 0.26 }] },
+  { id: 'builtin-low', name: 'Low Beep', pattern: [{ freq: 640, duration: 0.26, gap: 0.32 }] },
+  {
+    id: 'builtin-triple',
+    name: 'Triple Ping',
+    pattern: [
+      { freq: 900, duration: 0.12, gap: 0.06 },
+      { freq: 1080, duration: 0.12, gap: 0.06 },
+      { freq: 1260, duration: 0.14, gap: 0.42 },
+    ],
+  },
+  {
+    id: 'builtin-sweep',
+    name: 'Up Sweep',
+    pattern: [
+      { freq: 620, duration: 0.11, gap: 0.05 },
+      { freq: 760, duration: 0.11, gap: 0.05 },
+      { freq: 900, duration: 0.11, gap: 0.05 },
+      { freq: 1040, duration: 0.13, gap: 0.45 },
+    ],
+  },
+  {
+    id: 'builtin-urgent',
+    name: 'Urgent Pulse',
+    pattern: [
+      { freq: 1250, duration: 0.09, gap: 0.05 },
+      { freq: 1250, duration: 0.09, gap: 0.05 },
+      { freq: 1250, duration: 0.09, gap: 0.25 },
+      { freq: 1250, duration: 0.09, gap: 0.05 },
+      { freq: 1250, duration: 0.09, gap: 0.05 },
+      { freq: 1250, duration: 0.09, gap: 0.55 },
+    ],
+  },
+  {
+    id: 'builtin-chime',
+    name: 'Soft Chime',
+    pattern: [
+      { freq: 720, duration: 0.2, gap: 0.05 },
+      { freq: 960, duration: 0.2, gap: 0.6 },
+    ],
+  },
+];
+const DEFAULT_RINGTONE_ID = BUILTIN_RINGTONES[0].id;
+let activeAlarmId = null;
+let activeAudio = null;
+let beepIntervalId = null;
+let vibrationIntervalId = null;
+let beepTimeoutIds = [];
+let lastCheckedMinuteStamp = '';
+const minuteTriggersByAlarm = Object.create(null);
+let audioContext = null;
 
 function clamp(val, min, max) {
   return Math.min(max, Math.max(min, val));
+}
+
+function normalizeAlarmTime(value) {
+  return /^\d{2}:\d{2}$/.test(value) ? value : null;
+}
+
+function minuteStamp(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const h = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  return `${y}-${m}-${d} ${h}:${min}`;
+}
+
+function getRingtoneById(id) {
+  const custom = state.customRingtones.find(r => r.id === id);
+  if (custom) return { ...custom, kind: 'custom' };
+  const builtin = BUILTIN_RINGTONES.find(r => r.id === id);
+  if (builtin) return { ...builtin, kind: 'builtin' };
+  return { ...BUILTIN_RINGTONES[0], kind: 'builtin' };
+}
+
+function formatAlarmTime(time) {
+  const normalized = normalizeAlarmTime(time);
+  if (!normalized) return '--:--';
+  const [hhStr, mm] = normalized.split(':');
+  let hh = Number(hhStr);
+  if (state.format24) return `${String(hh).padStart(2, '0')}:${mm}`;
+  const suffix = hh >= 12 ? 'PM' : 'AM';
+  hh = hh % 12 || 12;
+  return `${String(hh).padStart(2, '0')}:${mm} ${suffix}`;
+}
+
+function sanitizeAlarmState() {
+  if (!Array.isArray(state.customRingtones)) state.customRingtones = [];
+  if (!Array.isArray(state.alarms)) state.alarms = [];
+  state.customRingtones = state.customRingtones.filter(r =>
+    r && typeof r.id === 'string' && typeof r.name === 'string' && typeof r.dataUrl === 'string'
+  );
+  state.alarms = state.alarms
+    .filter(a => a && typeof a.id === 'string' && normalizeAlarmTime(a.time))
+    .map(a => ({
+      id: a.id,
+      time: a.time,
+      enabled: a.enabled !== false,
+      ringtoneId: (a.ringtoneId && getRingtoneById(a.ringtoneId).id) || DEFAULT_RINGTONE_ID,
+    }));
+}
+
+function renderRingtoneOptions() {
+  const options = [
+    ...BUILTIN_RINGTONES.map(r => ({ id: r.id, name: r.name })),
+    ...state.customRingtones.map(r => ({ id: r.id, name: `${r.name} (Custom)` })),
+  ];
+  alarmRingtoneSelect.replaceChildren();
+  options.forEach(opt => {
+    const node = document.createElement('option');
+    node.value = opt.id;
+    node.textContent = opt.name;
+    alarmRingtoneSelect.appendChild(node);
+  });
+  const selected = alarmRingtoneSelect.value;
+  alarmRingtoneSelect.value = options.some(o => o.id === selected) ? selected : DEFAULT_RINGTONE_ID;
+}
+
+function renderAlarmList() {
+  alarmListEl.replaceChildren();
+  if (!state.alarms.length) {
+    const empty = document.createElement('div');
+    empty.className = 'alarm-ringtone';
+    empty.textContent = 'No alarms yet.';
+    alarmListEl.appendChild(empty);
+    return;
+  }
+
+  state.alarms
+    .sort((a, b) => a.time.localeCompare(b.time))
+    .forEach(alarm => {
+      const item = document.createElement('div');
+      item.className = 'alarm-item';
+
+      const timeEl = document.createElement('div');
+      timeEl.className = 'alarm-time';
+      timeEl.textContent = formatAlarmTime(alarm.time);
+
+      const ringtoneEl = document.createElement('div');
+      ringtoneEl.className = 'alarm-ringtone';
+      ringtoneEl.textContent = getRingtoneById(alarm.ringtoneId).name;
+
+      const toggleEl = document.createElement('button');
+      toggleEl.className = alarm.enabled ? 'active' : '';
+      toggleEl.textContent = alarm.enabled ? 'ON' : 'OFF';
+      toggleEl.addEventListener('click', () => {
+        alarm.enabled = !alarm.enabled;
+        saveState();
+        renderAlarmList();
+      });
+
+      const delEl = document.createElement('button');
+      delEl.className = 'alarm-del';
+      delEl.textContent = 'DEL';
+      delEl.addEventListener('click', () => {
+        if (activeAlarmId === alarm.id) stopActiveAlarm();
+        state.alarms = state.alarms.filter(a => a.id !== alarm.id);
+        delete minuteTriggersByAlarm[alarm.id];
+        saveState();
+        renderAlarmList();
+      });
+
+      item.append(timeEl, ringtoneEl, toggleEl, delEl);
+      alarmListEl.appendChild(item);
+    });
+}
+
+function getAudioContext() {
+  if (!window.AudioContext && !window.webkitAudioContext) return null;
+  if (!audioContext) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    audioContext = new Ctx();
+  }
+  if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+  return audioContext;
+}
+
+function playBeep(freq, durationSec) {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.16, ctx.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + durationSec);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + durationSec + 0.02);
+}
+
+function clearBeepTimers() {
+  clearInterval(beepIntervalId);
+  beepIntervalId = null;
+  beepTimeoutIds.forEach(id => clearTimeout(id));
+  beepTimeoutIds = [];
+}
+
+function getRingtonePattern(ringtone) {
+  if (Array.isArray(ringtone.pattern) && ringtone.pattern.length) return ringtone.pattern;
+  if (Number.isFinite(ringtone.freq) && Number.isFinite(ringtone.duration)) {
+    return [{ freq: ringtone.freq, duration: ringtone.duration, gap: Number(ringtone.gap) || 0.2 }];
+  }
+  return BUILTIN_RINGTONES[0].pattern;
+}
+
+function playPatternCycle(pattern) {
+  let offsetMs = 0;
+  pattern.forEach(note => {
+    const startId = setTimeout(() => {
+      playBeep(note.freq, note.duration);
+    }, offsetMs);
+    beepTimeoutIds.push(startId);
+    offsetMs += Math.round((note.duration + (Number(note.gap) || 0)) * 1000);
+  });
+  return Math.max(offsetMs, 180);
+}
+
+function startBuiltinPattern(ringtone) {
+  const pattern = getRingtonePattern(ringtone);
+  clearBeepTimers();
+  const cycleMs = playPatternCycle(pattern);
+  beepIntervalId = setInterval(() => {
+    playPatternCycle(pattern);
+  }, cycleMs);
+}
+
+function startVibrationLoop() {
+  if (!('vibrate' in navigator)) return;
+  navigator.vibrate([500, 250, 500]);
+  clearInterval(vibrationIntervalId);
+  vibrationIntervalId = setInterval(() => {
+    navigator.vibrate([500, 250, 500]);
+  }, 1250);
+}
+
+function stopVibrationLoop() {
+  clearInterval(vibrationIntervalId);
+  vibrationIntervalId = null;
+  if ('vibrate' in navigator) navigator.vibrate(0);
+}
+
+function stopActiveAlarm() {
+  if (!activeAlarmId) return;
+  activeAlarmId = null;
+  document.body.classList.remove('alarm-ringing');
+  if (activeAudio) {
+    activeAudio.pause();
+    activeAudio = null;
+  }
+  clearBeepTimers();
+  stopVibrationLoop();
+}
+
+function startAlarm(alarm) {
+  if (!alarm || activeAlarmId) return;
+  activeAlarmId = alarm.id;
+  document.body.classList.add('alarm-ringing');
+  startVibrationLoop();
+
+  const ringtone = getRingtoneById(alarm.ringtoneId);
+  if (ringtone.kind === 'custom') {
+    const audio = new Audio(ringtone.dataUrl);
+    audio.loop = true;
+    audio.play().then(() => {
+      activeAudio = audio;
+    }).catch(() => {
+      const fallback = BUILTIN_RINGTONES[0];
+      startBuiltinPattern(fallback);
+    });
+    return;
+  }
+
+  startBuiltinPattern(ringtone);
+}
+
+function checkAlarms(now) {
+  const currentMinuteStamp = minuteStamp(now);
+  if (currentMinuteStamp === lastCheckedMinuteStamp) return;
+  lastCheckedMinuteStamp = currentMinuteStamp;
+
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const nowTime = `${hh}:${mm}`;
+  const dueAlarm = state.alarms.find(a => a.enabled && a.time === nowTime && minuteTriggersByAlarm[a.id] !== currentMinuteStamp);
+  if (!dueAlarm) return;
+
+  minuteTriggersByAlarm[dueAlarm.id] = currentMinuteStamp;
+  startAlarm(dueAlarm);
 }
 
 function toPct(value, total) {
@@ -143,17 +441,6 @@ function updateLandscapeLabelAnchors() {
   if (hrX !== null) landscapeLabels.style.setProperty('--ls-hr-x', `${hrX}%`);
   if (minX !== null) landscapeLabels.style.setProperty('--ls-min-x', `${minX}%`);
   if (secX !== null) landscapeLabels.style.setProperty('--ls-sec-x', `${secX}%`);
-}
-
-function updateAmPmSlots(suffix) {
-  const hasSuffix = !!suffix;
-  const text = hasSuffix ? suffix : '';
-  ampmLandscape.textContent = text;
-  ampmPortrait.textContent = text;
-  ampmLandscape.style.display = hasSuffix ? '' : 'none';
-  ampmPortrait.style.display = hasSuffix ? '' : 'none';
-  clockStage.classList.toggle('no-ampm', !hasSuffix);
-  portraitHrStage.classList.toggle('no-ampm', !hasSuffix);
 }
 
 function updatePortraitMinLabelPosition() {
@@ -215,10 +502,14 @@ function buildFlipLine(el, text) {
 }
 
 function animateDigit(slot, nextChar) {
-  if (slot.value === nextChar && !slot.node.classList.contains('flipping')) return;
+  if (slot.value === nextChar) return;
   const fromChar = slot.staticFace.textContent;
   if (fromChar === nextChar) {
     slot.value = nextChar;
+    slot.staticFace.textContent = nextChar;
+    slot.front.textContent = nextChar;
+    slot.back.textContent = nextChar;
+    slot.node.classList.remove('flipping');
     return;
   }
   slot.value = nextChar;
@@ -283,11 +574,10 @@ function tick() {
   const m = String(now.getMinutes()).padStart(2,'0');
   const s = String(now.getSeconds()).padStart(2,'0');
 
-  let hStr, suffix = '';
+  let hStr;
   if (state.format24) {
     hStr = String(h).padStart(2,'0');
   } else {
-    suffix = h >= 12 ? 'PM' : 'AM';
     h = h % 12 || 12;
     hStr = String(h).padStart(2,'0');
   }
@@ -296,11 +586,10 @@ function tick() {
   const secPart = state.showSeconds ? ':' + s : '';
   renderFlipLine(clockEl, hStr + ':' + m + secPart);
 
-  // Portrait: split into blocks (AM/PM is rendered as outlined background text)
+  // Portrait: split into blocks
   renderFlipLine(portraitHr, hStr);
   renderFlipLine(portraitMin, m);
   renderFlipLine(portraitSec, s);
-  updateAmPmSlots(suffix);
 
   // Show/hide sec row in portrait
   portraitSecRow.style.display = state.showSeconds ? 'flex' : 'none';
@@ -308,6 +597,7 @@ function tick() {
   // Show/hide sec label in landscape
   lsSec.style.display = state.showSeconds ? '' : 'none';
 
+  checkAlarms(now);
   applyColor();
   fitText();
 }
@@ -342,7 +632,6 @@ function fitTextNow() {
     else lHi = mid;
   }
   clockEl.style.fontSize = lLo + 'px';
-  ampmLandscape.style.fontSize = Math.max(12, lLo * 0.36) + 'px';
   updateLandscapeLabelAnchors();
 
   // Portrait: one shared size, constrained by width and a row-height budget.
@@ -369,7 +658,6 @@ function fitTextNow() {
     else hi = mid;
   }
   portraitNums.forEach(el => { el.style.fontSize = lo + 'px'; });
-  ampmPortrait.style.fontSize = Math.max(11, lo * 0.34) + 'px';
 }
 
 function fitText() {
@@ -389,10 +677,6 @@ function applyFont() {
   clockTargets.forEach(el => {
     el.style.fontFamily = state.font;
     el.style.fontWeight = state.font === FONTS[0].css ? '700' : '400';
-  });
-  [ampmLandscape, ampmPortrait].forEach(el => {
-    el.style.fontFamily = state.font;
-    el.style.fontWeight = state.font === FONTS[0].css ? '700' : '500';
   });
 }
 
@@ -470,6 +754,8 @@ function restoreUI() {
     s.classList.toggle('active', s.dataset.css === state.gradient));
   document.querySelectorAll('#bg-grid .swatch').forEach(s =>
     s.classList.toggle('active', s.dataset.css === state.bg));
+  renderRingtoneOptions();
+  renderAlarmList();
 }
 
 /* ══ FONT HELPERS ══ */
@@ -535,6 +821,7 @@ document.querySelectorAll('[data-format]').forEach(btn => {
     document.querySelectorAll('[data-format]').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     state.format24 = btn.dataset.format === '24';
+    renderAlarmList();
     tick(); saveState();
   });
 });
@@ -640,6 +927,56 @@ document.getElementById('custom-bg').addEventListener('input', e => {
   state.bg = e.target.value; applyBg(); saveState();
 });
 
+/* ══ ALARMS ══ */
+function setDefaultAlarmInput() {
+  setAlarmInputOffset(1);
+}
+
+function setAlarmInputOffset(offsetMinutes) {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() + offsetMinutes);
+  alarmTimeInput.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+}
+
+alarmAddBtn.addEventListener('click', () => {
+  const time = normalizeAlarmTime(alarmTimeInput.value);
+  if (!time) return;
+  const id = `alarm_${Date.now()}_${Math.floor(Math.random() * 9999)}`;
+  const ringtoneId = getRingtoneById(alarmRingtoneSelect.value).id;
+  state.alarms.push({ id, time, enabled: true, ringtoneId });
+  saveState();
+  renderAlarmList();
+  setAlarmInputOffset(1);
+});
+
+alarmDefaultBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const offset = Number(btn.dataset.alarmOffset);
+    if (!Number.isFinite(offset) || offset < 1) return;
+    setAlarmInputOffset(offset);
+  });
+});
+
+ringtoneUploadInput.addEventListener('change', (e) => {
+  Array.from(e.target.files).forEach(file => {
+    const name = file.name.replace(/\.[^.]+$/, '') || 'Custom ringtone';
+    const reader = new FileReader();
+    reader.onload = ev => {
+      state.customRingtones.push({
+        id: `ringtone_${Date.now()}_${Math.floor(Math.random() * 9999)}`,
+        name,
+        dataUrl: ev.target.result,
+      });
+      saveState();
+      renderRingtoneOptions();
+      alarmRingtoneSelect.value = state.customRingtones[state.customRingtones.length - 1].id;
+      renderAlarmList();
+    };
+    reader.readAsDataURL(file);
+  });
+  e.target.value = '';
+});
+
 /* ══ PANEL + IDLE ══ */
 const panel     = document.getElementById('panel');
 const toggleBtn = document.getElementById('settings-toggle');
@@ -669,6 +1006,9 @@ function onActivity() {
 }
 ['pointermove','pointerdown','keydown','touchstart'].forEach(evt =>
   document.addEventListener(evt, onActivity, { passive: true }));
+document.addEventListener('pointerdown', () => {
+  if (activeAlarmId) stopActiveAlarm();
+}, { passive: true });
 
 const openPanel = () => {
   clearTimeout(idleTimer);
@@ -842,10 +1182,12 @@ async function requestFullscreen() {
   } catch(e) {}
 }
 document.getElementById('clock-wrap').addEventListener('click', e => {
+  if (activeAlarmId) return;
   if (!panel.classList.contains('open') && e.target !== toggleBtn)
     if (!document.fullscreenElement && !document.webkitFullscreenElement) requestFullscreen();
 });
 document.getElementById('portrait-wrap').addEventListener('click', e => {
+  if (activeAlarmId) return;
   if (!panel.classList.contains('open') && e.target !== toggleBtn)
     if (!document.fullscreenElement && !document.webkitFullscreenElement) requestFullscreen();
 });
@@ -878,6 +1220,7 @@ restoreSavedFonts(); // restore custom fonts from localStorage first
 applyAll();
 applyOrientationMode();
 restoreUI();
+setDefaultAlarmInput();
 setupBattery();
 tick();
 setInterval(tick, 1000);

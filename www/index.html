@@ -17,9 +17,8 @@
 
 <!-- LANDSCAPE: single line + labels below -->
 <div id="clock-wrap">
-  <div id="clock-stage" class="clock-stage no-ampm">
+  <div id="clock-stage" class="clock-stage">
     <div id="clock-display">00:00</div>
-    <div id="ampm-landscape" class="ampm-outline" aria-hidden="true">AM</div>
   </div>
   <div id="landscape-labels">
     <span class="ls-lbl" id="ls-hr">hr</span>
@@ -31,9 +30,8 @@
 <!-- PORTRAIT: HR / divider / MIN / divider / SEC (optional) -->
 <div id="portrait-wrap">
   <div class="p-label">hr</div>
-  <div id="portrait-hr-stage" class="p-num-stage no-ampm">
+  <div id="portrait-hr-stage" class="p-num-stage">
     <div class="p-num" id="portrait-hr">00</div>
-    <div id="ampm-portrait" class="ampm-outline ampm-portrait" aria-hidden="true">AM</div>
   </div>
   <div id="portrait-divider"></div>
   <div class="p-label" id="portrait-min-label">min</div>
@@ -58,7 +56,7 @@
     <div class="sec">Time Format</div>
     <div class="toggle-row">
       <button class="toggle-btn active" data-format="24">24h</button>
-      <button class="toggle-btn" data-format="12">12h AM/PM</button>
+      <button class="toggle-btn" data-format="12">12h</button>
     </div>
 
     <div class="sec">Seconds</div>
@@ -85,6 +83,27 @@
     <div id="orientation-hint" style="font-size:0.58rem;color:rgba(255,255,255,0.3);margin-top:0.4rem;line-height:1.5;">
       Force mode works best in installed app builds.
     </div>
+
+    <div class="sec">Alarm</div>
+    <div class="alarm-create-row">
+      <input type="time" id="alarm-time-input" aria-label="Alarm time">
+      <button id="alarm-add-btn" class="toggle-btn alarm-add-btn">Add Alarm</button>
+    </div>
+    <div class="alarm-defaults-row">
+      <button class="toggle-btn alarm-default-btn" data-alarm-offset="5">+5m</button>
+      <button class="toggle-btn alarm-default-btn" data-alarm-offset="10">+10m</button>
+      <button class="toggle-btn alarm-default-btn" data-alarm-offset="30">+30m</button>
+      <button class="toggle-btn alarm-default-btn" data-alarm-offset="60">+1h</button>
+    </div>
+    <div class="alarm-create-row alarm-ringtone-row">
+      <select id="alarm-ringtone-select" aria-label="Alarm ringtone"></select>
+      <label class="upload-label alarm-upload-label">
+        <span>Upload ringtone</span>
+        <input type="file" id="ringtone-upload" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac" multiple>
+      </label>
+    </div>
+    <div id="alarm-list" class="alarm-list"></div>
+    <div id="alarm-tap-hint" class="alarm-tap-hint">Tap anywhere on the clock to stop ringing.</div>
 
     <div class="sec">Font</div>
     <div class="font-grid" id="font-grid"></div>

@@ -31,10 +31,6 @@ body {
   white-space: nowrap; max-width: 100%;
   transition: font-family 0.3s, color 0.3s;
   display: inline-flex; align-items: center; justify-content: center;
-  padding-right: clamp(2.4rem, 13vw, 9.2rem);
-}
-.clock-stage.no-ampm #clock-display {
-  padding-right: 0;
 }
 #landscape-labels {
   position: relative;
@@ -88,49 +84,6 @@ body {
 #portrait-hr {
   position: relative;
   z-index: 2;
-  padding-right: clamp(2.1rem, 16vw, 7.2rem);
-}
-.p-num-stage.no-ampm #portrait-hr {
-  padding-right: 0;
-}
-.ampm-outline {
-  position: absolute;
-  right: clamp(0.24rem, 2.6vw, 1.5rem);
-  bottom: 0.08em;
-  line-height: 0.9;
-  font-size: 0.34em;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,0.2);
-  padding: 0.12em 0.2em 0.08em;
-  border: 1px solid rgba(255,255,255,0.14);
-  border-radius: 0.14em;
-  background: rgba(255,255,255,0.025);
-  opacity: 0.72;
-  -webkit-text-fill-color: transparent;
-  -webkit-text-stroke: 1.4px rgba(255,255,255,0.28);
-  pointer-events: none;
-  z-index: 1;
-}
-.ampm-portrait {
-  right: clamp(0.05rem, 3.9vw, 1.5rem);
-  bottom: 0.05em;
-  opacity: 0.9;
-  border-color: rgba(255,255,255,0.24);
-  background: rgba(255,255,255,0.045);
-  -webkit-text-stroke: 1.9px rgba(255,255,255,0.5);
-  text-shadow: 0 0 14px rgba(255,255,255,0.11);
-}
-#ampm-landscape {
-  border-color: rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.02);
-  -webkit-text-stroke: 1.3px rgba(255,255,255,0.26);
-}
-@supports not (-webkit-text-stroke: 1px #fff) {
-  .ampm-outline {
-    color: rgba(255,255,255,0.42);
-  }
 }
 #portrait-divider {
   width: 52%; height: 1px;
@@ -402,6 +355,113 @@ body {
   width: 30px; height: 30px; border: 1px solid rgba(255,255,255,0.15);
   background: none; cursor: pointer; border-radius: 6px; padding: 0;
 }
+
+.alarm-create-row {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+.alarm-create-row input[type=time],
+.alarm-create-row select {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 7px;
+  color: rgba(255,255,255,0.85);
+  padding: 0.55rem 0.6rem;
+  font-size: 0.66rem;
+  font-family: monospace;
+}
+.alarm-create-row input[type=time]::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(0.7);
+}
+.alarm-add-btn {
+  flex: 0 0 auto;
+  min-width: 92px;
+}
+.alarm-defaults-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+.alarm-default-btn {
+  padding-left: 0;
+  padding-right: 0;
+}
+.alarm-ringtone-row {
+  align-items: stretch;
+}
+.alarm-upload-label {
+  flex: 0 0 auto;
+  margin-top: 0;
+  padding: 0.55rem 0.7rem;
+}
+.alarm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+  max-height: 140px;
+  overflow-y: auto;
+}
+.alarm-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 7px;
+  padding: 0.45rem 0.55rem;
+  background: rgba(255,255,255,0.04);
+}
+.alarm-time {
+  font-size: 0.77rem;
+  color: #fff;
+}
+.alarm-ringtone {
+  font-size: 0.58rem;
+  color: rgba(255,255,255,0.48);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alarm-item button {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.8);
+  border-radius: 5px;
+  font-size: 0.58rem;
+  padding: 0.22rem 0.42rem;
+  cursor: pointer;
+  font-family: monospace;
+  touch-action: manipulation;
+}
+.alarm-item button.active {
+  border-color: rgba(110,255,160,0.55);
+  color: rgba(200,255,220,0.95);
+  background: rgba(50,180,90,0.22);
+}
+.alarm-item .alarm-del {
+  border-color: rgba(255,120,120,0.34);
+  color: rgba(255,170,170,0.9);
+}
+.alarm-tap-hint {
+  display: none;
+  margin-top: 0.35rem;
+  font-size: 0.58rem;
+  color: rgba(255,220,180,0.85);
+}
+body.alarm-ringing {
+  animation: alarm-pulse 1.05s ease-in-out infinite;
+}
+body.alarm-ringing #alarm-tap-hint {
+  display: block;
+}
+@keyframes alarm-pulse {
+  0%, 100% { box-shadow: inset 0 0 0 0 rgba(255,70,70,0.36); }
+  50% { box-shadow: inset 0 0 0 8px rgba(255,70,70,0.14); }
+}
 /* Screensaver mode */
 body.ss-active { cursor: none; }
 body.ss-active #settings-toggle { display: none; }
@@ -409,6 +469,8 @@ body.ss-active #settings-toggle { display: none; }
 #panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
 #custom-fonts-list::-webkit-scrollbar { width: 3px; }
 #custom-fonts-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+#alarm-list::-webkit-scrollbar { width: 3px; }
+#alarm-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
 @media (max-width: 380px) { :root { --panel-w: 100vw; } }
 @media (min-width: 768px) { :root { --panel-w: 320px; } }
 @media (max-height: 500px) and (orientation: landscape) {
