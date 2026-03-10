@@ -74,6 +74,20 @@
       Clock stays on screen while charging.
     </div>
 
+    <div class="sec">Screen Dimming on Idle</div>
+    <div class="toggle-row">
+      <button class="toggle-btn active" data-dimming="on">On</button>
+      <button class="toggle-btn" data-dimming="off">Off</button>
+    </div>
+    <div style="font-size:0.58rem;color:rgba(255,255,255,0.3);margin-top:0.4rem;line-height:1.5;">
+      Screen dims after 3 seconds of inactivity.
+    </div>
+    <div class="sec">Dimming Level</div>
+    <div class="slider-wrap">
+      <input type="range" id="dim-level-slider" min="0" max="95" value="70" step="5">
+      <span class="slider-val" id="dim-level-val">70%</span>
+    </div>
+
     <div class="sec">Orientation</div>
     <div class="toggle-row">
       <button class="toggle-btn active" data-orientation="auto">Auto</button>

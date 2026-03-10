@@ -51,6 +51,8 @@ const state = {
   customFonts: [], // [{name, family, dataUrl}]
   alarms: [], // [{id, time: "HH:MM", enabled, ringtoneId}]
   customRingtones: [], // [{id, name, dataUrl}]
+  dimmingEnabled: true, // enable screen dimming on idle
+  dimLevel: 70, // dimming level (0-100, higher = darker)
 };
 
 /* ══ STORAGE ══ */
@@ -71,6 +73,8 @@ function saveState() {
       customFonts: state.customFonts, // saved as base64 dataUrls — persist across sessions!
       alarms: state.alarms,
       customRingtones: state.customRingtones,
+      dimmingEnabled: state.dimmingEnabled,
+      dimLevel: state.dimLevel,
     }));
   } catch(e) { console.warn('save failed', e); }
 }
@@ -739,6 +743,8 @@ function restoreUI() {
     b.classList.toggle('active', (b.dataset.screensaver === 'on') === state.screensaver));
   document.querySelectorAll('[data-orientation]').forEach(b =>
     b.classList.toggle('active', b.dataset.orientation === state.orientationMode));
+  document.querySelectorAll('[data-dimming]').forEach(b =>
+    b.classList.toggle('active', (b.dataset.dimming === 'on') === state.dimmingEnabled));
   document.getElementById('screensaver-hint').style.display = state.screensaver ? 'block' : 'none';
   // Mark active font btn
   let anyFontActive = false;
@@ -750,6 +756,11 @@ function restoreUI() {
   const sizeSlider = document.getElementById('size-slider');
   sizeSlider.value = state.size;
   document.getElementById('size-val').textContent = state.size;
+  const dimLevelSlider = document.getElementById('dim-level-slider');
+  if (dimLevelSlider) {
+    dimLevelSlider.value = state.dimLevel;
+    document.getElementById('dim-level-val').textContent = state.dimLevel + '%';
+  }
   document.querySelectorAll('#gradient-grid .swatch').forEach(s =>
     s.classList.toggle('active', s.dataset.css === state.gradient));
   document.querySelectorAll('#bg-grid .swatch').forEach(s =>
@@ -855,6 +866,16 @@ document.querySelectorAll('[data-orientation]').forEach(btn => {
   });
 });
 
+document.querySelectorAll('[data-dimming]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-dimming]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.dimmingEnabled = btn.dataset.dimming === 'on';
+    if (!state.dimmingEnabled) exitDimming();
+    saveState();
+  });
+});
+
 /* ══ FONT GRID ══ */
 const fontGrid = document.getElementById('font-grid');
 FONTS.forEach((f, i) => {
@@ -891,6 +912,19 @@ sizeSlider.addEventListener('input', () => {
   state.size = Number(sizeSlider.value);
   sizeValEl.textContent = state.size;
   applySize(); saveState();
+});
+
+/* ══ DIM LEVEL SLIDER ══ */
+const dimLevelSlider = document.getElementById('dim-level-slider');
+const dimLevelValEl  = document.getElementById('dim-level-val');
+dimLevelSlider.addEventListener('input', () => {
+  state.dimLevel = Number(dimLevelSlider.value);
+  dimLevelValEl.textContent = state.dimLevel + '%';
+  if (isDimmed) {
+    const dimOpacity = state.dimLevel / 100;
+    document.body.style.setProperty('--dim-opacity', dimOpacity);
+  }
+  saveState();
 });
 
 /* ══ GRADIENT SWATCHES ══ */
@@ -977,6 +1011,21 @@ ringtoneUploadInput.addEventListener('change', (e) => {
   e.target.value = '';
 });
 
+/* ══ SCREEN DIMMING ══ */
+let isDimmed = false;
+function enterDimming() {
+  if (isDimmed || !state.dimmingEnabled) return;
+  isDimmed = true;
+  document.body.classList.add('dimmed');
+  const dimOpacity = Math.max(0, Math.min(100, state.dimLevel)) / 100;
+  document.body.style.setProperty('--dim-opacity', dimOpacity);
+}
+function exitDimming() {
+  if (!isDimmed) return;
+  isDimmed = false;
+  document.body.classList.remove('dimmed');
+}
+
 /* ══ PANEL + IDLE ══ */
 const panel     = document.getElementById('panel');
 const toggleBtn = document.getElementById('settings-toggle');
@@ -997,11 +1046,15 @@ function scheduleHide() {
   clearTimeout(idleTimer);
   if (panel.classList.contains('open')) return;
   idleTimer = setTimeout(() => {
-    if (!panel.classList.contains('open')) toggleBtn.classList.add('idle-hidden');
+    if (!panel.classList.contains('open')) {
+      toggleBtn.classList.add('idle-hidden');
+      enterDimming();
+    }
   }, IDLE_MS);
 }
 function onActivity() {
   if (ssActive) exitScreensaver();
+  exitDimming();
   toggleBtn.classList.remove('idle-hidden'); scheduleHide();
 }
 ['pointermove','pointerdown','keydown','touchstart'].forEach(evt =>

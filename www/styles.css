@@ -1,5 +1,5 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root { --panel-w: 300px; --panel-portrait-h: 50vh; }
+:root { --panel-w: 300px; --panel-portrait-h: 50vh; --dim-opacity: 0.7; }
 html, body { width: 100%; height: 100%; overflow: hidden; }
 body {
   display: flex; align-items: center; justify-content: center;
@@ -11,6 +11,22 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+  position: relative;
+}
+
+/* Dimming overlay */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, var(--dim-opacity));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+  z-index: 150;
+}
+body.dimmed::after {
+  opacity: 1;
 }
 
 /* ── LANDSCAPE: one line + labels below ── */
