@@ -43,6 +43,10 @@ jobs:
       - name: Add splash screen plugin
         run: cordova plugin add cordova-plugin-splashscreen --nosave || true
 
+      - name: Install Android Build Tools 35
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "build-tools;35.0.0" "platforms;android-35"
+
       - name: Build debug APK
         run: cordova build android --debug
 
