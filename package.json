@@ -22,7 +22,7 @@
     "plugins": {
       "cordova-plugin-screen-orientation": {},
       "cordova-plugin-insomnia": {},
-      "cordova-plugin-local-notification": {}
+      "@havesource/cordova-plugin-local-notification": "^0.9.0-rc3"
     }
   }
 }
