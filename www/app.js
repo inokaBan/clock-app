@@ -46,7 +46,6 @@ const state = {
   panelHeightVh: 50,
   format24:    true,
   showSeconds: true,
-  screensaver: false,
   orientationMode: 'auto', // auto | portrait | landscape
   customFonts: [], // [{name, family, dataUrl}]
   alarms: [], // [{id, time: "HH:MM", enabled, ringtoneId}]
@@ -68,7 +67,6 @@ function saveState() {
       panelHeightVh: state.panelHeightVh,
       format24:    state.format24,
       showSeconds: state.showSeconds,
-      screensaver: state.screensaver,
       orientationMode: state.orientationMode,
       customFonts: state.customFonts, // saved as base64 dataUrls — persist across sessions!
       alarms: state.alarms,
@@ -165,6 +163,7 @@ let beepTimeoutIds = [];
 let lastCheckedMinuteStamp = '';
 const minuteTriggersByAlarm = Object.create(null);
 let audioContext = null;
+let localNotifReady = false;
 
 function clamp(val, min, max) {
   return Math.min(max, Math.max(min, val));
@@ -265,6 +264,7 @@ function renderAlarmList() {
         alarm.enabled = !alarm.enabled;
         saveState();
         renderAlarmList();
+        syncScheduledAlarms();
       });
 
       const delEl = document.createElement('button');
@@ -276,6 +276,7 @@ function renderAlarmList() {
         delete minuteTriggersByAlarm[alarm.id];
         saveState();
         renderAlarmList();
+        syncScheduledAlarms();
       });
 
       item.append(timeEl, ringtoneEl, toggleEl, delEl);
@@ -392,6 +393,79 @@ function startAlarm(alarm) {
   }
 
   startBuiltinPattern(ringtone);
+}
+
+function getLocalNotification() {
+  return (
+    window.cordova &&
+    window.cordova.plugins &&
+    window.cordova.plugins.notification &&
+    window.cordova.plugins.notification.local
+  ) || null;
+}
+
+function hashAlarmId(id) {
+  let hash = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    hash ^= id.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash >>> 0);
+}
+
+function getNextAlarmDate(time) {
+  const [hh, mm] = time.split(':').map(n => Number(n));
+  const now = new Date();
+  const next = new Date(now);
+  next.setSeconds(0, 0);
+  next.setHours(hh, mm, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+  return next;
+}
+
+function syncScheduledAlarms() {
+  const local = getLocalNotification();
+  if (!local || !localNotifReady) return;
+  const enabled = state.alarms.filter(a => a.enabled && normalizeAlarmTime(a.time));
+  local.cancelAll(() => {
+    enabled.forEach(alarm => {
+      const time = normalizeAlarmTime(alarm.time);
+      if (!time) return;
+      const [hour, minute] = time.split(':').map(n => Number(n));
+      const nextDate = getNextAlarmDate(time);
+      local.schedule({
+        id: hashAlarmId(alarm.id),
+        title: 'Alarm',
+        text: `Alarm ${formatAlarmTime(time)}`,
+        trigger: { firstAt: nextDate, every: { hour, minute } },
+        foreground: true,
+        priority: 2,
+        visibility: 1,
+        smallIcon: 'res://icon',
+        sound: null,
+        vibrate: true,
+        data: { alarmId: alarm.id },
+        allowWhileIdle: true,
+      });
+    });
+  });
+}
+
+function initLocalNotifications() {
+  const local = getLocalNotification();
+  if (!local) return;
+  local.requestPermission(granted => {
+    localNotifReady = !!granted;
+    if (!localNotifReady) return;
+    if (typeof local.on === 'function') {
+      local.on('trigger', notification => {
+        const alarmId = notification && notification.data && notification.data.alarmId;
+        const alarm = state.alarms.find(a => a.id === alarmId);
+        if (alarm && document.visibilityState === 'visible') startAlarm(alarm);
+      });
+    }
+    syncScheduledAlarms();
+  });
 }
 
 function checkAlarms(now) {
@@ -739,13 +813,10 @@ function restoreUI() {
     b.classList.toggle('active', (b.dataset.format === '24') === state.format24));
   document.querySelectorAll('[data-seconds]').forEach(b =>
     b.classList.toggle('active', (b.dataset.seconds === 'show') === state.showSeconds));
-  document.querySelectorAll('[data-screensaver]').forEach(b =>
-    b.classList.toggle('active', (b.dataset.screensaver === 'on') === state.screensaver));
   document.querySelectorAll('[data-orientation]').forEach(b =>
     b.classList.toggle('active', b.dataset.orientation === state.orientationMode));
   document.querySelectorAll('[data-dimming]').forEach(b =>
     b.classList.toggle('active', (b.dataset.dimming === 'on') === state.dimmingEnabled));
-  document.getElementById('screensaver-hint').style.display = state.screensaver ? 'block' : 'none';
   // Mark active font btn
   let anyFontActive = false;
   document.querySelectorAll('.font-btn').forEach(b => {
@@ -843,16 +914,6 @@ document.querySelectorAll('[data-seconds]').forEach(btn => {
     btn.classList.add('active');
     state.showSeconds = btn.dataset.seconds === 'show';
     tick(); saveState();
-  });
-});
-
-document.querySelectorAll('[data-screensaver]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-screensaver]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    state.screensaver = btn.dataset.screensaver === 'on';
-    document.getElementById('screensaver-hint').style.display = state.screensaver ? 'block' : 'none';
-    saveState(); setupBattery();
   });
 });
 
@@ -980,6 +1041,7 @@ alarmAddBtn.addEventListener('click', () => {
   state.alarms.push({ id, time, enabled: true, ringtoneId });
   saveState();
   renderAlarmList();
+  syncScheduledAlarms();
   setAlarmInputOffset(1);
 });
 
@@ -1053,7 +1115,6 @@ function scheduleHide() {
   }, IDLE_MS);
 }
 function onActivity() {
-  if (ssActive) exitScreensaver();
   exitDimming();
   toggleBtn.classList.remove('idle-hidden'); scheduleHide();
 }
@@ -1183,47 +1244,52 @@ function applyOrientationMode() {
   tryLockOrientation(target);
 }
 
-/* ══ SCREENSAVER ══ */
-let ssActive = false;
-function enterScreensaver() {
-  if (ssActive) return;
-  ssActive = true;
-  document.body.classList.add('ss-active');
-  applyBg();
-  toggleBtn.classList.add('idle-hidden');
-}
-function exitScreensaver() {
-  if (!ssActive) return;
-  ssActive = false;
-  document.body.classList.remove('ss-active');
-  applyBg();
-}
-
-let batteryRef = null;
-function onChargingChange() {
-  if (!batteryRef) return;
-  if (state.screensaver && batteryRef.charging) enterScreensaver();
-  else exitScreensaver();
-}
-function setupBattery() {
-  if (!('getBattery' in navigator)) return;
-  navigator.getBattery().then(battery => {
-    batteryRef = battery;
-    battery.removeEventListener('chargingchange', onChargingChange);
-    battery.addEventListener('chargingchange', onChargingChange);
-    onChargingChange();
-  }).catch(() => {});
-}
-
 /* ══ WAKE LOCK ══ */
 let wakeLock = null;
+let useInsomnia = false;
+function requestInsomnia() {
+  const insomnia = window.plugins && window.plugins.insomnia;
+  if (!insomnia || typeof insomnia.keepAwake !== 'function') return false;
+  try {
+    insomnia.keepAwake();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+function releaseInsomnia() {
+  const insomnia = window.plugins && window.plugins.insomnia;
+  if (!insomnia || typeof insomnia.allowSleepAgain !== 'function') return;
+  try { insomnia.allowSleepAgain(); } catch (e) {}
+}
 async function requestWakeLock() {
-  if (!('wakeLock' in navigator)) return;
-  try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
+  if ('wakeLock' in navigator) {
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => {
+        wakeLock = null;
+        if (document.visibilityState === 'visible') requestWakeLock();
+      });
+      return;
+    } catch (e) {}
+  }
+  if (requestInsomnia()) useInsomnia = true;
+}
+function clearWakeLock() {
+  if (wakeLock) {
+    try { wakeLock.release(); } catch (e) {}
+    wakeLock = null;
+  }
+  if (useInsomnia) releaseInsomnia();
 }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') requestWakeLock();
+  else clearWakeLock();
 });
+window.addEventListener('focus', requestWakeLock, { passive: true });
+window.addEventListener('blur', clearWakeLock, { passive: true });
+document.addEventListener('pause', clearWakeLock, false);
+document.addEventListener('resume', requestWakeLock, false);
 requestWakeLock();
 
 /* ══ FULLSCREEN ══ */
@@ -1264,6 +1330,8 @@ if ('serviceWorker' in navigator) {
 
 document.addEventListener('deviceready', () => {
   applyOrientationMode();
+  requestWakeLock();
+  initLocalNotifications();
   setTimeout(fitText, 80);
   setTimeout(fitText, 260);
 }, false);
@@ -1274,6 +1342,5 @@ applyAll();
 applyOrientationMode();
 restoreUI();
 setDefaultAlarmInput();
-setupBattery();
 tick();
 setInterval(tick, 1000);
