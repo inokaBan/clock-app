@@ -20,7 +20,9 @@
       "android"
     ],
     "plugins": {
-      "cordova-plugin-screen-orientation": {}
+      "cordova-plugin-screen-orientation": {},
+      "cordova-plugin-insomnia": {},
+      "cordova-plugin-local-notification": {}
     }
   }
 }
