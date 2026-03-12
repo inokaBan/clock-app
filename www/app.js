@@ -1287,10 +1287,14 @@ document.addEventListener('visibilitychange', () => {
   else clearWakeLock();
 });
 window.addEventListener('focus', requestWakeLock, { passive: true });
-window.addEventListener('blur', clearWakeLock, { passive: true });
 document.addEventListener('pause', clearWakeLock, false);
 document.addEventListener('resume', requestWakeLock, false);
 requestWakeLock();
+
+// Re-assert wake lock periodically in case the OS or WebView releases it.
+setInterval(() => {
+  if (document.visibilityState === 'visible') requestWakeLock();
+}, 30000);
 
 /* ══ FULLSCREEN ══ */
 async function requestFullscreen() {
