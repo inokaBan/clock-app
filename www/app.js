@@ -170,6 +170,7 @@ let alarmFlashIntervalId = null;
 let alarmFlashOffTimeoutId = null;
 let torchAvailablePromise = null;
 let alarmFlashRunToken = 0;
+let torchFlashState = false;
 
 function clamp(val, min, max) {
   return Math.min(max, Math.max(min, val));
@@ -424,13 +425,9 @@ function stopScreenFlashLoop() {
 }
 
 function pulseTorchLoop() {
-  setTorchEnabled(true).then(ok => {
-    if (!ok) return;
-    clearTimeout(alarmFlashOffTimeoutId);
-    alarmFlashOffTimeoutId = setTimeout(() => {
-      setTorchEnabled(false);
-    }, 180);
-  });
+  // Toggle the torch state for a clear ON/OFF pattern
+  torchFlashState = !torchFlashState;
+  setTorchEnabled(torchFlashState);
 }
 
 async function startAlarmFlash() {
@@ -446,8 +443,11 @@ async function startAlarmFlash() {
   const canUseTorch = isCordovaRuntime() && await checkTorchAvailable();
   if (runToken !== alarmFlashRunToken || !activeAlarmId) return;
   if (canUseTorch) {
-    pulseTorchLoop();
-    alarmFlashIntervalId = setInterval(pulseTorchLoop, 520);
+    // Start with torch ON
+    torchFlashState = true;
+    setTorchEnabled(true);
+    // Flash every 200ms for a clear 2.5Hz strobe effect (ON 200ms, OFF 200ms)
+    alarmFlashIntervalId = setInterval(pulseTorchLoop, 200);
     return;
   }
   if (mode === 'auto') startScreenFlashLoop();
@@ -459,6 +459,7 @@ function stopAlarmFlash(shouldInvalidate = true) {
   alarmFlashIntervalId = null;
   clearTimeout(alarmFlashOffTimeoutId);
   alarmFlashOffTimeoutId = null;
+  torchFlashState = false;
   stopScreenFlashLoop();
   setTorchEnabled(false);
 }
