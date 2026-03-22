@@ -107,6 +107,16 @@
         <input type="file" id="ringtone-upload" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac" multiple>
       </label>
     </div>
+    <div class="sec">Alarm Flash</div>
+    <div class="toggle-row">
+      <button class="toggle-btn active" data-alarm-flash="auto">Auto</button>
+      <button class="toggle-btn" data-alarm-flash="rear">Torch</button>
+      <button class="toggle-btn" data-alarm-flash="front">Front</button>
+      <button class="toggle-btn" data-alarm-flash="off">Off</button>
+    </div>
+    <div id="alarm-flash-hint" class="alarm-flash-hint">
+      Auto uses the rear flashlight when available and falls back to a bright front screen flash.
+    </div>
     <div id="alarm-list" class="alarm-list"></div>
     <div id="alarm-tap-hint" class="alarm-tap-hint">Tap anywhere on the clock to stop ringing.</div>
 

@@ -50,6 +50,7 @@ const state = {
   customFonts: [], // [{name, family, dataUrl}]
   alarms: [], // [{id, time: "HH:MM", enabled, ringtoneId}]
   customRingtones: [], // [{id, name, dataUrl}]
+  alarmFlashMode: 'auto', // auto | rear | front | off
   dimmingEnabled: true, // enable screen dimming on idle
   dimLevel: 70, // dimming level (0-100, higher = darker)
 };
@@ -71,6 +72,7 @@ function saveState() {
       customFonts: state.customFonts, // saved as base64 dataUrls — persist across sessions!
       alarms: state.alarms,
       customRingtones: state.customRingtones,
+      alarmFlashMode: state.alarmFlashMode,
       dimmingEnabled: state.dimmingEnabled,
       dimLevel: state.dimLevel,
     }));
@@ -87,9 +89,6 @@ function loadState() {
     });
   } catch(e) { console.warn('load failed', e); }
 }
-
-loadState();
-sanitizeAlarmState();
 
 /* ══ CLOCK ELEMENTS ══ */
 const clockEl    = document.getElementById('clock-display');
@@ -111,6 +110,7 @@ const clockTargets = [clockEl, portraitHr, portraitMin, portraitSec];
 const flipMap = new WeakMap();
 let fitTextRafId = null;
 let fitTextRafId2 = null;
+const ALARM_FLASH_MODES = ['auto', 'rear', 'front', 'off'];
 const BUILTIN_RINGTONES = [
   { id: 'builtin-classic', name: 'Classic Beep', pattern: [{ freq: 880, duration: 0.2, gap: 0.26 }] },
   { id: 'builtin-low', name: 'Low Beep', pattern: [{ freq: 640, duration: 0.26, gap: 0.32 }] },
@@ -155,6 +155,8 @@ const BUILTIN_RINGTONES = [
   },
 ];
 const DEFAULT_RINGTONE_ID = BUILTIN_RINGTONES[0].id;
+loadState();
+sanitizeAlarmState();
 let activeAlarmId = null;
 let activeAudio = null;
 let beepIntervalId = null;
@@ -164,6 +166,10 @@ let lastCheckedMinuteStamp = '';
 const minuteTriggersByAlarm = Object.create(null);
 let audioContext = null;
 let localNotifReady = false;
+let alarmFlashIntervalId = null;
+let alarmFlashOffTimeoutId = null;
+let torchAvailablePromise = null;
+let alarmFlashRunToken = 0;
 
 function clamp(val, min, max) {
   return Math.min(max, Math.max(min, val));
@@ -204,6 +210,7 @@ function formatAlarmTime(time) {
 function sanitizeAlarmState() {
   if (!Array.isArray(state.customRingtones)) state.customRingtones = [];
   if (!Array.isArray(state.alarms)) state.alarms = [];
+  if (!ALARM_FLASH_MODES.includes(state.alarmFlashMode)) state.alarmFlashMode = 'auto';
   state.customRingtones = state.customRingtones.filter(r =>
     r && typeof r.id === 'string' && typeof r.name === 'string' && typeof r.dataUrl === 'string'
   );
@@ -361,6 +368,101 @@ function stopVibrationLoop() {
   if ('vibrate' in navigator) navigator.vibrate(0);
 }
 
+function getFlashlightPlugin() {
+  return (window.plugins && window.plugins.flashlight) || null;
+}
+
+function isCordovaRuntime() {
+  return !!window.cordova;
+}
+
+function getAlarmFlashMode() {
+  return ALARM_FLASH_MODES.includes(state.alarmFlashMode) ? state.alarmFlashMode : 'auto';
+}
+
+function setTorchEnabled(enabled) {
+  return new Promise(resolve => {
+    const plugin = getFlashlightPlugin();
+    if (!plugin) {
+      resolve(false);
+      return;
+    }
+    const finish = () => resolve(true);
+    const fail = () => resolve(false);
+    try {
+      if (enabled) plugin.switchOn(finish, fail);
+      else plugin.switchOff(finish, fail);
+    } catch (e) {
+      resolve(false);
+    }
+  });
+}
+
+function checkTorchAvailable() {
+  if (torchAvailablePromise) return torchAvailablePromise;
+  torchAvailablePromise = new Promise(resolve => {
+    const plugin = getFlashlightPlugin();
+    if (!plugin || typeof plugin.available !== 'function') {
+      resolve(false);
+      return;
+    }
+    try {
+      plugin.available(isAvailable => resolve(!!isAvailable));
+    } catch (e) {
+      resolve(false);
+    }
+  }).catch(() => false);
+  return torchAvailablePromise;
+}
+
+function startScreenFlashLoop() {
+  document.body.classList.add('alarm-screen-flashing');
+}
+
+function stopScreenFlashLoop() {
+  document.body.classList.remove('alarm-screen-flashing');
+}
+
+function pulseTorchLoop() {
+  setTorchEnabled(true).then(ok => {
+    if (!ok) return;
+    clearTimeout(alarmFlashOffTimeoutId);
+    alarmFlashOffTimeoutId = setTimeout(() => {
+      setTorchEnabled(false);
+    }, 180);
+  });
+}
+
+async function startAlarmFlash() {
+  stopAlarmFlash(false);
+  const runToken = ++alarmFlashRunToken;
+  const mode = getAlarmFlashMode();
+  if (mode === 'off') return;
+  if (mode === 'front') {
+    if (runToken !== alarmFlashRunToken || !activeAlarmId) return;
+    startScreenFlashLoop();
+    return;
+  }
+  const canUseTorch = isCordovaRuntime() && await checkTorchAvailable();
+  if (runToken !== alarmFlashRunToken || !activeAlarmId) return;
+  if (canUseTorch) {
+    pulseTorchLoop();
+    alarmFlashIntervalId = setInterval(pulseTorchLoop, 520);
+    return;
+  }
+  if (mode === 'auto') startScreenFlashLoop();
+}
+
+function stopAlarmFlash(shouldInvalidate = true) {
+  if (shouldInvalidate) alarmFlashRunToken += 1;
+  clearInterval(alarmFlashIntervalId);
+  alarmFlashIntervalId = null;
+  clearTimeout(alarmFlashOffTimeoutId);
+  alarmFlashOffTimeoutId = null;
+  stopScreenFlashLoop();
+  setTorchEnabled(false);
+}
+
 function stopActiveAlarm() {
   if (!activeAlarmId) return;
   activeAlarmId = null;
@@ -371,6 +473,7 @@ function stopActiveAlarm() {
   }
   clearBeepTimers();
   stopVibrationLoop();
+  stopAlarmFlash();
 }
 
 function startAlarm(alarm) {
@@ -378,6 +481,7 @@ function startAlarm(alarm) {
   activeAlarmId = alarm.id;
   document.body.classList.add('alarm-ringing');
   startVibrationLoop();
+  startAlarmFlash();
 
   const ringtone = getRingtoneById(alarm.ringtoneId);
   if (ringtone.kind === 'custom') {
@@ -815,6 +919,8 @@ function restoreUI() {
     b.classList.toggle('active', (b.dataset.seconds === 'show') === state.showSeconds));
   document.querySelectorAll('[data-orientation]').forEach(b =>
     b.classList.toggle('active', b.dataset.orientation === state.orientationMode));
+  document.querySelectorAll('[data-alarm-flash]').forEach(b =>
+    b.classList.toggle('active', b.dataset.alarmFlash === state.alarmFlashMode));
   document.querySelectorAll('[data-dimming]').forEach(b =>
     b.classList.toggle('active', (b.dataset.dimming === 'on') === state.dimmingEnabled));
   // Mark active font btn
@@ -923,6 +1029,16 @@ document.querySelectorAll('[data-orientation]').forEach(btn => {
     btn.classList.add('active');
     state.orientationMode = btn.dataset.orientation;
     applyOrientationMode();
+    saveState();
+  });
+});
+
+document.querySelectorAll('[data-alarm-flash]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-alarm-flash]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.alarmFlashMode = ALARM_FLASH_MODES.includes(btn.dataset.alarmFlash) ? btn.dataset.alarmFlash : 'auto';
+    if (activeAlarmId) startAlarmFlash();
     saveState();
   });
 });
@@ -1283,12 +1399,23 @@ function clearWakeLock() {
   if (useInsomnia) releaseInsomnia();
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') requestWakeLock();
-  else clearWakeLock();
+  if (document.visibilityState === 'visible') {
+    requestWakeLock();
+    if (activeAlarmId) startAlarmFlash();
+  }
+  else {
+    clearWakeLock();
+    if (activeAlarmId) stopAlarmFlash();
+  }
 });
 window.addEventListener('focus', requestWakeLock, { passive: true });
 document.addEventListener('pause', clearWakeLock, false);
+document.addEventListener('pause', stopAlarmFlash, false);
 document.addEventListener('resume', requestWakeLock, false);
+document.addEventListener('resume', () => {
+  if (activeAlarmId) startAlarmFlash();
+}, false);
+window.addEventListener('beforeunload', stopAlarmFlash, { passive: true });
 requestWakeLock();
 
 // Re-assert wake lock periodically in case the OS or WebView releases it.

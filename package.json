@@ -22,7 +22,11 @@
     "plugins": {
       "cordova-plugin-screen-orientation": {},
       "cordova-plugin-insomnia": {},
-      "cordova-plugin-local-notification": {}
+      "cordova-plugin-local-notification": {},
+      "cordova-plugin-flashlight": {}
     }
+  },
+  "dependencies": {
+    "cordova-plugin-flashlight": "^3.2.0"
   }
 }
