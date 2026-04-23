@@ -9,6 +9,11 @@
     <access origin="*" />
     <allow-intent href="http://*/*" />
     <allow-intent href="https://*/*" />
+    <config-file target="AndroidManifest.xml" parent="/manifest" xmlns:android="http://schemas.android.com/apk/res/android">
+        <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+        <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+        <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    </config-file>
 
     <icon src="www/icon-512.png" />
     <platform name="android">

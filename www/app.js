@@ -166,6 +166,7 @@ let lastCheckedMinuteStamp = '';
 const minuteTriggersByAlarm = Object.create(null);
 let audioContext = null;
 let localNotifReady = false;
+let pendingAlarmId = null;
 let alarmFlashIntervalId = null;
 let alarmFlashOffTimeoutId = null;
 let torchAvailablePromise = null;
@@ -467,6 +468,7 @@ function stopAlarmFlash(shouldInvalidate = true) {
 function stopActiveAlarm() {
   if (!activeAlarmId) return;
   activeAlarmId = null;
+  pendingAlarmId = null;
   document.body.classList.remove('alarm-ringing');
   if (activeAudio) {
     activeAudio.pause();
@@ -479,6 +481,7 @@ function stopActiveAlarm() {
 
 function startAlarm(alarm) {
   if (!alarm || activeAlarmId) return;
+  pendingAlarmId = null;
   activeAlarmId = alarm.id;
   document.body.classList.add('alarm-ringing');
   startVibrationLoop();
@@ -528,6 +531,25 @@ function getNextAlarmDate(time) {
   return next;
 }
 
+function queueOrStartAlarm(alarm) {
+  if (!alarm || alarm.enabled === false) return;
+  if (document.visibilityState === 'visible') {
+    startAlarm(alarm);
+    return;
+  }
+  pendingAlarmId = alarm.id;
+}
+
+function flushPendingAlarm() {
+  if (!pendingAlarmId || activeAlarmId) return;
+  const alarm = state.alarms.find(a => a.id === pendingAlarmId && a.enabled);
+  if (!alarm) {
+    pendingAlarmId = null;
+    return;
+  }
+  startAlarm(alarm);
+}
+
 function syncScheduledAlarms() {
   const local = getLocalNotification();
   if (!local || !localNotifReady) return;
@@ -544,10 +566,10 @@ function syncScheduledAlarms() {
         text: `Alarm ${formatAlarmTime(time)}`,
         trigger: { firstAt: nextDate, every: { hour, minute } },
         foreground: true,
+        wakeup: true,
         priority: 2,
         visibility: 1,
         smallIcon: 'res://icon',
-        sound: null,
         vibrate: true,
         data: { alarmId: alarm.id },
         allowWhileIdle: true,
@@ -566,7 +588,13 @@ function initLocalNotifications() {
       local.on('trigger', notification => {
         const alarmId = notification && notification.data && notification.data.alarmId;
         const alarm = state.alarms.find(a => a.id === alarmId);
-        if (alarm && document.visibilityState === 'visible') startAlarm(alarm);
+        queueOrStartAlarm(alarm);
+      });
+      local.on('click', notification => {
+        const alarmId = notification && notification.data && notification.data.alarmId;
+        const alarm = state.alarms.find(a => a.id === alarmId);
+        queueOrStartAlarm(alarm);
+        flushPendingAlarm();
       });
     }
     syncScheduledAlarms();
@@ -1380,6 +1408,11 @@ function releaseInsomnia() {
   try { insomnia.allowSleepAgain(); } catch (e) {}
 }
 async function requestWakeLock() {
+  if (wakeLock || useInsomnia) return;
+  if (isCordovaRuntime() && requestInsomnia()) {
+    useInsomnia = true;
+    return;
+  }
   if ('wakeLock' in navigator) {
     try {
       wakeLock = await navigator.wakeLock.request('screen');
@@ -1397,11 +1430,15 @@ function clearWakeLock() {
     try { wakeLock.release(); } catch (e) {}
     wakeLock = null;
   }
-  if (useInsomnia) releaseInsomnia();
+  if (useInsomnia) {
+    releaseInsomnia();
+    useInsomnia = false;
+  }
 }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     requestWakeLock();
+    flushPendingAlarm();
     if (activeAlarmId) startAlarmFlash();
   }
   else {
@@ -1414,6 +1451,7 @@ document.addEventListener('pause', clearWakeLock, false);
 document.addEventListener('pause', stopAlarmFlash, false);
 document.addEventListener('resume', requestWakeLock, false);
 document.addEventListener('resume', () => {
+  flushPendingAlarm();
   if (activeAlarmId) startAlarmFlash();
 }, false);
 window.addEventListener('beforeunload', stopAlarmFlash, { passive: true });
